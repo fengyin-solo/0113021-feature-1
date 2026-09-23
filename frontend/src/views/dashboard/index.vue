@@ -2,34 +2,34 @@
   <div class="dashboard-container">
     <el-row :gutter="20" class="mb-20">
       <el-col :span="6">
-        <div class="stat-card">
+        <div class="stat-card clickable" @click="goWellList()">
           <div class="stat-icon well">
             <el-icon><Position /></el-icon>
           </div>
           <div class="stat-content">
-            <div class="stat-value">{{ statistics.wellCount || 0 }}</div>
+            <div class="stat-value">{{ wellStore.statistics.wellCount || 0 }}</div>
             <div class="stat-label">总井数</div>
           </div>
         </div>
       </el-col>
       <el-col :span="6">
-        <div class="stat-card">
+        <div class="stat-card clickable" @click="goWellList({ status: '钻井中' })">
           <div class="stat-icon drilling">
             <el-icon><Monitor /></el-icon>
           </div>
           <div class="stat-content">
-            <div class="stat-value">{{ statistics.drillingCount || 0 }}</div>
+            <div class="stat-value">{{ wellStore.statistics.drillingCount || 0 }}</div>
             <div class="stat-label">钻井中</div>
           </div>
         </div>
       </el-col>
       <el-col :span="6">
-        <div class="stat-card">
+        <div class="stat-card clickable" @click="goWellList({ status: '生产中' })">
           <div class="stat-icon production">
             <el-icon><TrendCharts /></el-icon>
           </div>
           <div class="stat-content">
-            <div class="stat-value">{{ statistics.productionCount || 0 }}</div>
+            <div class="stat-value">{{ wellStore.statistics.productionCount || 0 }}</div>
             <div class="stat-label">生产中</div>
           </div>
         </div>
@@ -107,16 +107,24 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import * as echarts from 'echarts'
 import mapboxgl from 'mapbox-gl'
 import 'mapbox-gl/dist/mapbox-gl.css'
+import { useWellStore } from '@/store/modules/well'
+import { WellQuery } from '@/views/well/constants'
+
+const router = useRouter()
+const wellStore = useWellStore()
 
 const statistics = ref({
-  wellCount: 156,
-  drillingCount: 12,
-  productionCount: 89,
   alarmCount: 5
 })
+
+// 驾驶舱与台账列表共用同一份井位数据，不同入口看到的总数保持一致
+const goWellList = (query: Partial<WellQuery> = {}) => {
+  router.push({ path: '/well', query })
+}
 
 const alarmList = ref([
   { wellName: 'A-01井', alarmType: '钻压异常', level: '严重', time: '2024-01-15 10:30' },
@@ -184,10 +192,10 @@ const initWellStatusChart = () => {
         type: 'pie',
         radius: '60%',
         data: [
-          { value: 89, name: '生产中', itemStyle: { color: '#22c55e' } },
-          { value: 12, name: '钻井中', itemStyle: { color: '#3b82f6' } },
-          { value: 35, name: '待修井', itemStyle: { color: '#f59e0b' } },
-          { value: 20, name: '关停井', itemStyle: { color: '#ef4444' } }
+          { value: wellStore.statistics.productionCount, name: '生产中', itemStyle: { color: '#22c55e' } },
+          { value: wellStore.statistics.drillingCount, name: '钻井中', itemStyle: { color: '#3b82f6' } },
+          { value: wellStore.statistics.maintenanceCount, name: '待修井', itemStyle: { color: '#f59e0b' } },
+          { value: wellStore.statistics.shutdownCount, name: '关停井', itemStyle: { color: '#ef4444' } }
         ],
         emphasis: { itemStyle: { shadowBlur: 10, shadowOffsetX: 0, shadowColor: 'rgba(0, 0, 0, 0.5)' } }
       }
@@ -256,6 +264,16 @@ onMounted(() => {
   align-items: center;
   gap: 16px;
   box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.08);
+
+  &.clickable {
+    cursor: pointer;
+    transition: transform 0.2s, box-shadow 0.2s;
+
+    &:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 16px 0 rgba(59, 130, 246, 0.2);
+    }
+  }
 }
 
 .stat-icon {
