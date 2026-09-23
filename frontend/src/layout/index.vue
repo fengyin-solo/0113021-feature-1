@@ -7,7 +7,7 @@
           <h3 v-else>WLMS</h3>
         </div>
         <el-menu
-          :default-active="$route.path"
+          :default-active="activeMenu"
           :collapse="isCollapse"
           router
           background-color="#0f172a"
@@ -87,11 +87,17 @@ const isCollapse = ref(false)
 
 const menuList = computed(() => {
   const routes = router.options.routes.find(r => r.path === '/')?.children || []
-  return routes.filter(r => r.meta?.title && r.path !== '')
+  return routes.filter(r => r.meta?.title && r.path !== '' && !r.meta?.hidden)
 })
 
 const currentTitle = computed(() => {
   return route.meta?.title || ''
+})
+
+/** 隐藏页（如井位详情）仍高亮其所属一级菜单 */
+const activeMenu = computed(() => {
+  if (route.path.startsWith('/well/detail')) return '/well'
+  return route.path
 })
 
 const handleCommand = (command: string) => {

@@ -2,7 +2,7 @@
   <div class="dashboard-container">
     <el-row :gutter="20" class="mb-20">
       <el-col :span="6">
-        <div class="stat-card">
+        <div class="stat-card clickable" @click="goWellList()">
           <div class="stat-icon well">
             <el-icon><Position /></el-icon>
           </div>
@@ -13,7 +13,7 @@
         </div>
       </el-col>
       <el-col :span="6">
-        <div class="stat-card">
+        <div class="stat-card clickable" @click="goWellList('钻井中')">
           <div class="stat-icon drilling">
             <el-icon><Monitor /></el-icon>
           </div>
@@ -24,7 +24,7 @@
         </div>
       </el-col>
       <el-col :span="6">
-        <div class="stat-card">
+        <div class="stat-card clickable" @click="goWellList('生产中')">
           <div class="stat-icon production">
             <el-icon><TrendCharts /></el-icon>
           </div>
@@ -107,16 +107,38 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import * as echarts from 'echarts'
 import mapboxgl from 'mapbox-gl'
 import 'mapbox-gl/dist/mapbox-gl.css'
+import { useWellStore } from '@/store/modules/well'
+import { WELL_STATUSES, STATUS_COLOR } from '@/constants/well'
 
+const router = useRouter()
+const wellStore = useWellStore()
+
+// 井位相关总数与台账同一数据源，保证不同入口看到的总数一致
 const statistics = ref({
-  wellCount: 156,
-  drillingCount: 12,
-  productionCount: 89,
+  wellCount: 0,
+  drillingCount: 0,
+  productionCount: 0,
   alarmCount: 5
 })
+
+const loadWellStatistics = async () => {
+  // 每次进入驾驶舱都强制刷新，保证与井位台账看到的总数始终一致
+  const data = await wellStore.loadStatistics(true)
+  if (data) {
+    statistics.value.wellCount = data.total
+    statistics.value.drillingCount = data.statusCounts['钻井中'] || 0
+    statistics.value.productionCount = data.statusCounts['生产中'] || 0
+  }
+}
+
+/** 驾驶舱卡片/饼图下钻：携带状态条件进入井位台账 */
+const goWellList = (status?: string) => {
+  router.push(status ? { path: '/well', query: { status } } : { path: '/well' })
+}
 
 const alarmList = ref([
   { wellName: 'A-01井', alarmType: '钻压异常', level: '严重', time: '2024-01-15 10:30' },
@@ -175,23 +197,33 @@ const initProductionTrendChart = () => {
 const initWellStatusChart = () => {
   if (!wellStatusChart.value) return
   const chart = echarts.init(wellStatusChart.value)
+  const counts = wellStore.statistics?.statusCounts || {}
   chart.setOption({
-    tooltip: { trigger: 'item' },
+    tooltip: {
+      trigger: 'item',
+      formatter: (params: { name: string; value: number; percent: number }) =>
+        `${params.name}：${params.value} 口（${params.percent}%），点击查看明细`
+    },
     legend: { orient: 'vertical', left: 'left' },
     series: [
       {
         name: '井状态',
         type: 'pie',
         radius: '60%',
-        data: [
-          { value: 89, name: '生产中', itemStyle: { color: '#22c55e' } },
-          { value: 12, name: '钻井中', itemStyle: { color: '#3b82f6' } },
-          { value: 35, name: '待修井', itemStyle: { color: '#f59e0b' } },
-          { value: 20, name: '关停井', itemStyle: { color: '#ef4444' } }
-        ],
+        data: WELL_STATUSES.map(name => ({
+          value: counts[name] || 0,
+          name,
+          itemStyle: { color: STATUS_COLOR[name] }
+        })),
         emphasis: { itemStyle: { shadowBlur: 10, shadowOffsetX: 0, shadowColor: 'rgba(0, 0, 0, 0.5)' } }
       }
     ]
+  })
+  // 点击状态扇区下钻到带状态条件的井位台账
+  chart.on('click', (params: { name?: string }) => {
+    if (params.name && WELL_STATUSES.includes(params.name as typeof WELL_STATUSES[number])) {
+      goWellList(params.name)
+    }
   })
   window.addEventListener('resize', () => chart.resize())
 }
@@ -236,7 +268,8 @@ const initMap = () => {
   }
 }
 
-onMounted(() => {
+onMounted(async () => {
+  await loadWellStatistics()
   initProductionTrendChart()
   initWellStatusChart()
   initMap()
@@ -256,6 +289,16 @@ onMounted(() => {
   align-items: center;
   gap: 16px;
   box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.08);
+
+  &.clickable {
+    cursor: pointer;
+    transition: transform 0.2s, box-shadow 0.2s;
+
+    &:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 16px 0 rgba(59, 130, 246, 0.2);
+    }
+  }
 }
 
 .stat-icon {
